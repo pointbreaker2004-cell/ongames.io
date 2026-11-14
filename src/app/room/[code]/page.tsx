@@ -14,8 +14,9 @@ import { SecretSithView } from '@/components/games/SecretSithView';
 import { TwoTruthsView } from '@/components/games/TwoTruthsView';
 import { UnoView } from '@/components/games/UnoView';
 import { ChessView } from '@/components/games/ChessView';
-import { RotateCcw, AlertCircle, ArrowLeft, Users, Gamepad2 } from 'lucide-react';
+import { RotateCcw, AlertCircle, ArrowLeft, Users, Gamepad2, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
+import { ChatDrawer } from '@/components/ChatDrawer';
 
 export default function RoomPage() {
   const params = useParams();
@@ -31,11 +32,14 @@ export default function RoomPage() {
     restartGame,
     changeGame,
     kickPlayer,
-    sendAction
+    sendAction,
+    sendChatMessage,
+    addBotPlayer
   } = useSocket(roomCode);
 
   const [promptName, setPromptName] = useState(false);
   const [enteredName, setEnteredName] = useState('');
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     const saved = getSavedName();
@@ -43,6 +47,12 @@ export default function RoomPage() {
       setPromptName(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (roomState) {
+      setPromptName(false);
+    }
+  }, [roomState]);
 
   const handleNameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +129,7 @@ export default function RoomPage() {
           onStartGame={startGame}
           onChangeGame={changeGame}
           onKickPlayer={kickPlayer}
+          onAddBot={addBotPlayer}
         />
       )}
 
@@ -126,7 +137,7 @@ export default function RoomPage() {
       {roomState.status !== 'lobby' && (
         <div className="space-y-4">
           {/* Top Bar for In-Game Screen */}
-          <div className="flex items-center justify-between text-xs font-bold text-slate-500 pb-3 border-b border-slate-200">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-500 pb-3 border-b border-slate-200 flex-wrap gap-2">
             <div className="flex items-center gap-2.5">
               <span className="font-mono bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-xl text-slate-800 font-bold tracking-wider">
                 ROOM: {roomState.code}
@@ -138,15 +149,39 @@ export default function RoomPage() {
               </span>
             </div>
 
-            {roomState.isHost && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => { playClickSound(); restartGame(); }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm transition-colors"
+                type="button"
+                onClick={() => {
+                  try { playClickSound(); } catch {}
+                  setIsChatOpen(prev => !prev);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm transition-colors touch-manipulation cursor-pointer"
+                title="Open Chat"
               >
-                <RotateCcw className="h-3.5 w-3.5 text-sky-600" />
-                <span>Return to Lobby</span>
+                <MessageSquare className="h-3.5 w-3.5 text-indigo-600" />
+                <span>Chat</span>
+                {roomState.messages && roomState.messages.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black">
+                    {roomState.messages.length}
+                  </span>
+                )}
               </button>
-            )}
+
+              {roomState.isHost && (
+                <button
+                  type="button"
+                  onClick={() => { 
+                    try { playClickSound(); } catch {}
+                    restartGame(); 
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm transition-colors touch-manipulation cursor-pointer"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 text-sky-600" />
+                  <span>Return to Lobby</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Render Game View based on GameType */}
@@ -226,6 +261,15 @@ export default function RoomPage() {
           )}
         </div>
       )}
+
+      {/* Real-time In-Game Chat Drawer */}
+      <ChatDrawer
+        messages={roomState.messages || []}
+        myPlayerId={roomState.myPlayerId}
+        onSendMessage={sendChatMessage}
+        isOpen={isChatOpen}
+        onToggle={() => setIsChatOpen(prev => !prev)}
+      />
     </div>
   );
 }

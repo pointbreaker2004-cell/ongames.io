@@ -128,14 +128,31 @@ export function LobbyView({ room, onStartGame, onChangeGame, onKickPlayer, onAdd
 
       {/* Players Roster */}
       <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 sm:p-7 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
             <Users className="h-4 w-4 text-sky-600" />
             <span>PLAYERS IN LOBBY ({currentCount})</span>
           </div>
-          <span className="text-xs font-semibold text-slate-500">
-            {canStart ? 'Ready to launch!' : `Need ${minPlayers - currentCount} more`}
-          </span>
+
+          <div className="flex items-center gap-2">
+            {room.isHost && onAddBot && (
+              <button
+                type="button"
+                onClick={() => {
+                  try { playClickSound(); } catch {}
+                  onAddBot();
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200/80 active:scale-95 transition-all touch-manipulation cursor-pointer"
+                title="Add a bot player for testing"
+              >
+                <Bot className="h-3.5 w-3.5 text-indigo-600" />
+                <span>+ Add Bot</span>
+              </button>
+            )}
+            <span className="text-xs font-semibold text-slate-500">
+              {canStart ? 'Ready to launch!' : `Need ${minPlayers - currentCount} more`}
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -177,8 +194,12 @@ export function LobbyView({ room, onStartGame, onChangeGame, onKickPlayer, onAdd
 
                   {room.isHost && !p.isHost && (
                     <button
-                      onClick={() => { playClickSound(); onKickPlayer(p.id); }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      type="button"
+                      onClick={() => { 
+                        try { playClickSound(); } catch {}
+                        onKickPlayer(p.id); 
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors touch-manipulation cursor-pointer"
                       title="Remove Player"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -192,16 +213,43 @@ export function LobbyView({ room, onStartGame, onChangeGame, onKickPlayer, onAdd
       </div>
 
       {/* Start Game Action */}
-      <div className="pt-2">
+      <div className="pt-2 space-y-2.5">
         {room.isHost ? (
-          <button
-            onClick={onStartGame}
-            disabled={!canStart}
-            className="w-full py-4 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white font-black text-lg shadow-md active:scale-98 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            <Play className="h-5 w-5 fill-white" />
-            <span>{canStart ? 'Start Game Now' : `Need at least ${minPlayers} players to start`}</span>
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                try { playClickSound(); } catch {}
+                onStartGame();
+              }}
+              className={`w-full py-4 rounded-2xl text-white font-black text-base sm:text-lg shadow-md active:scale-98 transition-all flex items-center justify-center gap-2 touch-manipulation cursor-pointer ${
+                canStart 
+                  ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-600/25' 
+                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/25'
+              }`}
+            >
+              <Play className="h-5 w-5 fill-white" />
+              <span>{canStart ? 'Start Game Now' : 'Start Anyway (Practice / Test Mode)'}</span>
+            </button>
+
+            {!canStart && (
+              <div className="flex items-center justify-between px-3 py-2 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-xs font-semibold">
+                <span>Official game requires {minPlayers} players ({currentCount}/{minPlayers} joined).</span>
+                {onAddBot && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { playClickSound(); } catch {}
+                      onAddBot();
+                    }}
+                    className="underline font-bold text-indigo-700 hover:text-indigo-900 cursor-pointer"
+                  >
+                    + Add Bot to fill
+                  </button>
+                )}
+              </div>
+            )}
+          </>
         ) : (
           <div className="p-4 rounded-2xl bg-white border border-slate-200 text-center text-sm font-semibold text-slate-500 flex items-center justify-center gap-2 shadow-sm">
             <span className="h-2 w-2 rounded-full bg-sky-500 animate-ping" />
