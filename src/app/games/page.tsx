@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { GAME_CATALOG } from '@shared/gameMetadata';
 import { GameType, GameMetadata } from '@shared/types';
@@ -10,7 +10,7 @@ import { playClickSound } from '@/lib/sounds';
 import {
   Users, Clock, ArrowRight, BookOpen, X, Sparkles, 
   Gamepad2, Flame, ShieldAlert, KeyRound, Eye, Moon, Heart, 
-  Radio, Sword, Crown, HelpCircle, Layers, Zap, Check
+  Radio, Sword, Crown, HelpCircle, Layers, Zap, Check, Loader2, AlertCircle
 } from 'lucide-react';
 
 interface GameThemeConfig {
@@ -118,17 +118,26 @@ const THEMES: Record<GameType, GameThemeConfig> = {
 
 export default function GamesCatalogPage() {
   const router = useRouter();
-  const { createRoom, roomState } = useSocket();
+  const { createRoom, roomState, error: socketError } = useSocket();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [activeRuleModal, setActiveRuleModal] = useState<GameMetadata | null>(null);
   const [createModalGame, setCreateModalGame] = useState<GameMetadata | null>(null);
   const [playerName, setPlayerName] = useState<string>('');
   const [quickCode, setQuickCode] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  if (roomState?.code) {
-    router.push(`/room/${roomState.code}`);
-  }
+  useEffect(() => {
+    if (roomState?.code) {
+      router.push(`/room/${roomState.code}`);
+    }
+  }, [roomState?.code, router]);
+
+  useEffect(() => {
+    if (socketError) {
+      setIsSubmitting(false);
+    }
+  }, [socketError]);
 
   const categoryOptions = [
     { label: 'All Games', count: GAME_CATALOG.length, emoji: '✨' },
@@ -144,14 +153,17 @@ export default function GamesCatalogPage() {
     : GAME_CATALOG.filter(g => g.category === selectedCategory);
 
   const handleOpenCreateModal = (game: GameMetadata) => {
-    playClickSound();
-    setPlayerName(getSavedName() || '');
+    try { playClickSound(); } catch {}
+    const saved = getSavedName();
+    setPlayerName(saved || 'Host');
+    setIsSubmitting(false);
     setCreateModalGame(game);
   };
 
   const handleConfirmCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createModalGame) return;
+    if (!createModalGame || isSubmitting) return;
+    setIsSubmitting(true);
     const name = playerName.trim() || 'Host';
     saveName(name);
     createRoom(createModalGame.id, name);
@@ -160,7 +172,7 @@ export default function GamesCatalogPage() {
   const handleQuickJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (quickCode.trim().length === 4) {
-      playClickSound();
+      try { playClickSound(); } catch {}
       router.push(`/join?code=${quickCode.toUpperCase().trim()}`);
     }
   };
@@ -322,16 +334,25 @@ export default function GamesCatalogPage() {
                 {/* Card Action Buttons */}
                 <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
                   <button
-                    onClick={() => { playClickSound(); setActiveRuleModal(game); }}
-                    className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    type="button"
+                    onClick={(e) => { 
+                      e.stopPropagation();
+                      try { playClickSound(); } catch {}
+                      setActiveRuleModal(game); 
+                    }}
+                    className="flex-1 py-3 px-3 rounded-xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 font-bold text-xs flex items-center justify-center gap-1.5 transition-all touch-manipulation active:scale-95 cursor-pointer"
                   >
                     <BookOpen className="h-3.5 w-3.5 text-slate-400" />
                     <span>Rules</span>
                   </button>
 
                   <button
-                    onClick={() => handleOpenCreateModal(game)}
-                    className={`flex-1 py-2.5 px-3 rounded-xl ${theme.buttonBg} text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95`}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenCreateModal(game);
+                    }}
+                    className={`flex-1 py-3 px-3 rounded-xl ${theme.buttonBg} text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95 touch-manipulation cursor-pointer`}
                   >
                     <span>New Game</span>
                     <ArrowRight className="h-3.5 w-3.5" />
@@ -345,11 +366,15 @@ export default function GamesCatalogPage() {
 
       {/* Host Room Modal */}
       {createModalGame && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="relative w-full max-w-md rounded-3xl bg-white p-6 sm:p-8 shadow-2xl border border-slate-100">
             <button
-              onClick={() => { playClickSound(); setCreateModalGame(null); }}
-              className="absolute top-5 right-5 p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              type="button"
+              onClick={() => { 
+                try { playClickSound(); } catch {}
+                setCreateModalGame(null); 
+              }}
+              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors touch-manipulation"
             >
               <X className="h-5 w-5" />
             </button>
@@ -360,6 +385,13 @@ export default function GamesCatalogPage() {
               <p className="text-xs text-slate-500 mt-1">Requires at least {createModalGame.minPlayers} players to begin.</p>
             </div>
 
+            {socketError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                <span>{socketError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleConfirmCreate} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -368,21 +400,28 @@ export default function GamesCatalogPage() {
                 <input
                   type="text"
                   required
-                  autoFocus
                   maxLength={18}
+                  autoComplete="name"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100 text-sm transition-all"
+                  placeholder="e.g. Alex"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100 text-base transition-all"
                 />
               </div>
 
               <button
                 type="submit"
-                disabled={!playerName.trim()}
-                className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm active:scale-98 transition-all shadow-md shadow-indigo-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isSubmitting}
+                className="w-full py-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm active:scale-98 transition-all shadow-md shadow-indigo-600/25 disabled:opacity-50 touch-manipulation cursor-pointer flex items-center justify-center gap-2"
               >
-                Create Room &amp; Get 4-Letter Code
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    <span>Creating Room...</span>
+                  </>
+                ) : (
+                  <span>Create Room &amp; Get 4-Letter Code</span>
+                )}
               </button>
             </form>
           </div>

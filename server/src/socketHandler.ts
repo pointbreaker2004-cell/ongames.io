@@ -120,7 +120,27 @@ export function setupSocketHandlers(io: Server) {
       }
     });
 
-    // 9. Leave Room
+    // 9. Chat Message
+    socket.on('room:chat', (data: { text: string }) => {
+      if (!currentRoomCode || !data?.text) return;
+      const msg = roomManager.addChatMessage(currentRoomCode, socket.id, data.text);
+      if (msg) {
+        broadcastRoomUpdate(currentRoomCode);
+      }
+    });
+
+    // 10. Add Bot Player (Host only, for testing / solo)
+    socket.on('room:add_bot', () => {
+      if (!currentRoomCode) return;
+      const result = roomManager.addBotPlayer(currentRoomCode, socket.id);
+      if (result.success) {
+        broadcastRoomUpdate(currentRoomCode);
+      } else {
+        socket.emit('room:error', result.error || 'Could not add bot player');
+      }
+    });
+
+    // 11. Leave Room
     socket.on('room:leave', () => {
       if (currentRoomCode) {
         socket.leave(currentRoomCode);
@@ -132,7 +152,7 @@ export function setupSocketHandlers(io: Server) {
       }
     });
 
-    // 10. Disconnect
+    // 12. Disconnect
     socket.on('disconnect', () => {
       const room = roomManager.handleDisconnect(socket.id);
       if (room) {

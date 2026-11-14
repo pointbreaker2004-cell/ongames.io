@@ -1,4 +1,4 @@
-import { GameType, Player, RoomStatus, BaseRoomConfig, ClientRoomView } from '../../shared/types.js';
+import { GameType, Player, RoomStatus, BaseRoomConfig, ClientRoomView, ChatMessage } from '../../shared/types.js';
 import { GameEngine } from './games/base.js';
 import { CodewordsEngine } from './games/codewords.js';
 import { SpyfallEngine } from './games/spyfall.js';
@@ -15,12 +15,14 @@ export interface Room {
   code: string;
   gameType: GameType;
   hostId: string;
+  hostToken: string;
   status: RoomStatus;
   createdAt: number;
   lastActiveAt: number;
   players: Player[];
   config: BaseRoomConfig;
   engine: GameEngine | null;
+  messages: ChatMessage[];
 }
 
 export class RoomManager {
@@ -88,12 +90,21 @@ export class RoomManager {
       code,
       gameType,
       hostId: socketId,
+      hostToken: hostToken,
       status: 'lobby',
       createdAt: Date.now(),
       lastActiveAt: Date.now(),
       players: [hostPlayer],
       config: {},
-      engine: null
+      engine: null,
+      messages: [{
+        id: Math.random().toString(36).substring(2, 9),
+        senderId: 'system',
+        senderName: 'System',
+        text: `Room created! Invite friends with code ${code}`,
+        timestamp: Date.now(),
+        isSystem: true
+      }]
     };
 
     this.rooms.set(code, room);
@@ -121,6 +132,11 @@ export class RoomManager {
       if (playerName.trim()) {
         existingPlayer.name = playerName.trim();
       }
+      // If this player is the original host, restore their host status
+      if (existingPlayer.token === room.hostToken || existingPlayer.isHost) {
+        existingPlayer.isHost = true;
+        room.hostId = socketId;
+      }
       return { success: true, room };
     }
 
@@ -129,20 +145,32 @@ export class RoomManager {
       return { success: false, error: 'A game is currently in progress in this room.' };
     }
 
+    const isHostPlayer = room.players.length === 0 || playerToken === room.hostToken;
     const newPlayer: Player = {
       id: socketId,
       token: playerToken,
       name: playerName.trim() || `Player ${room.players.length + 1}`,
-      isHost: room.players.length === 0,
+      isHost: isHostPlayer,
       isConnected: true,
       joinedAt: Date.now()
     };
 
     if (newPlayer.isHost) {
       room.hostId = socketId;
+      room.hostToken = playerToken;
     }
 
     room.players.push(newPlayer);
+    if (!room.messages) room.messages = [];
+    room.messages.push({
+      id: Math.random().toString(36).substring(2, 9),
+      senderId: 'system',
+      senderName: 'System',
+      text: `${newPlayer.name} joined the room`,
+      timestamp: Date.now(),
+      isSystem: true
+    });
+
     return { success: true, room };
   }
 
@@ -152,16 +180,6 @@ export class RoomManager {
       if (player) {
         player.isConnected = false;
         room.lastActiveAt = Date.now();
-
-        // If host disconnected, reassign host to the next connected player if in lobby
-        if (player.isHost && room.status === 'lobby') {
-          const nextActive = room.players.find(p => p.isConnected && p.id !== socketId);
-          if (nextActive) {
-            player.isHost = false;
-            nextActive.isHost = true;
-            room.hostId = nextActive.id;
-          }
-        }
         return room;
       }
     }
@@ -173,7 +191,8 @@ export class RoomManager {
     if (!room) return { success: false, error: 'Room not found' };
 
     const player = room.players.find(p => p.id === socketId);
-    if (!player?.isHost) return { success: false, error: 'Only the host can start the game' };
+    const isHost = player && (player.token === room.hostToken || player.isHost);
+    if (!isHost) return { success: false, error: 'Only the host can start the game' };
 
     const engine = this.createEngine(room.gameType);
     engine.init(room.players, room.config);
@@ -181,6 +200,17 @@ export class RoomManager {
     room.engine = engine;
     room.status = 'playing';
     room.lastActiveAt = Date.now();
+
+    if (!room.messages) room.messages = [];
+    room.messages.push({
+      id: Math.random().toString(36).substring(2, 9),
+      senderId: 'system',
+      senderName: 'System',
+      text: `Game started! Good luck have fun! 🎮`,
+      timestamp: Date.now(),
+      isSystem: true
+    });
+
     return { success: true };
   }
 
@@ -188,9 +218,24 @@ export class RoomManager {
     const room = this.getRoom(code);
     if (!room) return { success: false, error: 'Room not found' };
 
+    const player = room.players.find(p => p.id === socketId);
+    const isHost = player && (player.token === room.hostToken || player.isHost);
+    if (!isHost) return { success: false, error: 'Only the host can return to lobby' };
+
     room.status = 'lobby';
     room.engine = null;
     room.lastActiveAt = Date.now();
+
+    if (!room.messages) room.messages = [];
+    room.messages.push({
+      id: Math.random().toString(36).substring(2, 9),
+      senderId: 'system',
+      senderName: 'System',
+      text: `Returned to lobby.`,
+      timestamp: Date.now(),
+      isSystem: true
+    });
+
     return { success: true };
   }
 
@@ -199,12 +244,24 @@ export class RoomManager {
     if (!room) return { success: false, error: 'Room not found' };
 
     const player = room.players.find(p => p.id === socketId);
-    if (!player?.isHost) return { success: false, error: 'Only the host can change the game' };
+    const isHost = player && (player.token === room.hostToken || player.isHost);
+    if (!isHost) return { success: false, error: 'Only the host can change the game' };
 
     room.gameType = newGameType;
     room.status = 'lobby';
     room.engine = null;
     room.lastActiveAt = Date.now();
+
+    if (!room.messages) room.messages = [];
+    room.messages.push({
+      id: Math.random().toString(36).substring(2, 9),
+      senderId: 'system',
+      senderName: 'System',
+      text: `Game changed to ${newGameType}.`,
+      timestamp: Date.now(),
+      isSystem: true
+    });
+
     return { success: true };
   }
 
@@ -213,10 +270,87 @@ export class RoomManager {
     if (!room) return { success: false, error: 'Room not found' };
 
     const host = room.players.find(p => p.id === hostSocketId);
-    if (!host?.isHost) return { success: false, error: 'Only the host can kick players' };
+    const isHost = host && (host.token === room.hostToken || host.isHost);
+    if (!isHost) return { success: false, error: 'Only the host can kick players' };
 
+    const target = room.players.find(p => p.id === targetPlayerId);
     room.players = room.players.filter(p => p.id !== targetPlayerId);
+
+    if (target) {
+      if (!room.messages) room.messages = [];
+      room.messages.push({
+        id: Math.random().toString(36).substring(2, 9),
+        senderId: 'system',
+        senderName: 'System',
+        text: `${target.name} was removed from the room`,
+        timestamp: Date.now(),
+        isSystem: true
+      });
+    }
+
     return { success: true };
+  }
+
+  addBotPlayer(code: string, hostSocketId: string): { success: boolean; error?: string } {
+    const room = this.getRoom(code);
+    if (!room) return { success: false, error: 'Room not found' };
+
+    const host = room.players.find(p => p.id === hostSocketId);
+    const isHost = host && (host.token === room.hostToken || host.isHost);
+    if (!isHost) return { success: false, error: 'Only the host can add bots' };
+
+    const botNames = ['Bot Alex 🤖', 'Bot Charlie 🤖', 'Bot Sam 🤖', 'Bot Riley 🤖', 'Bot Jordan 🤖'];
+    const botCount = room.players.filter(p => p.token.startsWith('bot-')).length;
+    const name = botNames[botCount % botNames.length] || `Bot ${botCount + 1} 🤖`;
+    const botId = `bot-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const botPlayer: Player = {
+      id: botId,
+      token: botId,
+      name,
+      isHost: false,
+      isConnected: true,
+      joinedAt: Date.now()
+    };
+    room.players.push(botPlayer);
+
+    if (!room.messages) room.messages = [];
+    room.messages.push({
+      id: Math.random().toString(36).substring(2, 9),
+      senderId: 'system',
+      senderName: 'System',
+      text: `${name} joined the room`,
+      timestamp: Date.now(),
+      isSystem: true
+    });
+
+    room.lastActiveAt = Date.now();
+    return { success: true };
+  }
+
+  addChatMessage(code: string, socketId: string, text: string): ChatMessage | null {
+    const room = this.getRoom(code);
+    if (!room || !text.trim()) return null;
+
+    const player = room.players.find(p => p.id === socketId);
+    const senderName = player ? player.name : 'Player';
+    const isHost = player ? (player.token === room.hostToken || player.isHost) : false;
+
+    const msg: ChatMessage = {
+      id: Math.random().toString(36).substring(2, 9),
+      senderId: socketId,
+      senderName,
+      text: text.trim().slice(0, 280),
+      timestamp: Date.now(),
+      isHost
+    };
+
+    if (!room.messages) room.messages = [];
+    room.messages.push(msg);
+    if (room.messages.length > 50) {
+      room.messages.shift();
+    }
+    room.lastActiveAt = Date.now();
+    return msg;
   }
 
   handleGameAction(code: string, socketId: string, action: any): { success: boolean; error?: string } {
@@ -235,6 +369,7 @@ export class RoomManager {
   getSanitizedView(room: Room, socketId: string): ClientRoomView {
     const player = room.players.find(p => p.id === socketId);
     const gameView = room.engine ? room.engine.getSanitizedView(socketId) : null;
+    const isHost = player ? (player.token === room.hostToken || player.isHost) : false;
 
     return {
       code: room.code,
@@ -245,13 +380,14 @@ export class RoomManager {
         id: p.id,
         token: p.token,
         name: p.name,
-        isHost: p.isHost,
+        isHost: p.token === room.hostToken || p.isHost,
         isConnected: p.isConnected
       })),
       config: room.config,
       gameView,
       myPlayerId: socketId,
-      isHost: !!player?.isHost
+      isHost: !!isHost,
+      messages: room.messages || []
     };
   }
 }

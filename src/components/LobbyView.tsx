@@ -7,7 +7,7 @@ import { QRCodeModal } from '@/components/QRCodeModal';
 import { playClickSound } from '@/lib/sounds';
 import { 
   Users, Crown, QrCode, Copy, Check, Play, Settings2, Trash2, 
-  Sparkles, Share2 
+  Sparkles, Share2, Bot, Plus, Zap
 } from 'lucide-react';
 
 interface LobbyViewProps {
@@ -15,11 +15,12 @@ interface LobbyViewProps {
   onStartGame: () => void;
   onChangeGame: (newGame: GameType) => void;
   onKickPlayer: (targetId: string) => void;
+  onAddBot?: () => void;
 }
 
 const AVATAR_EMOJIS = ['🦊', '🐺', '🦁', '🐼', '🦅', '🦉', '🦄', '🐲', '🐯', '🐸', '🐨', '🦖'];
 
-export function LobbyView({ room, onStartGame, onChangeGame, onKickPlayer }: LobbyViewProps) {
+export function LobbyView({ room, onStartGame, onChangeGame, onKickPlayer, onAddBot }: LobbyViewProps) {
   const [showQR, setShowQR] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showGamePicker, setShowGamePicker] = useState(false);

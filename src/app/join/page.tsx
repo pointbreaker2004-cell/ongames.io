@@ -25,9 +25,11 @@ function JoinContent() {
     }
   }, [searchParams]);
 
-  if (roomState?.code) {
-    router.push(`/room/${roomState.code}`);
-  }
+  useEffect(() => {
+    if (roomState?.code) {
+      router.push(`/room/${roomState.code}`);
+    }
+  }, [roomState?.code, router]);
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();

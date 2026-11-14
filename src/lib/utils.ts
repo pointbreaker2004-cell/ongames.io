@@ -9,24 +9,41 @@ export function cn(...inputs: ClassValue[]) {
 // Persistent Player Token (Device UUID)
 export function getPlayerToken(): string {
   if (typeof window === 'undefined') return '';
-  let token = localStorage.getItem('ongames_player_token');
-  if (!token) {
-    token = uuidv4();
-    localStorage.setItem('ongames_player_token', token);
+  try {
+    let token = localStorage.getItem('ongames_player_token');
+    if (!token) {
+      token = uuidv4();
+      localStorage.setItem('ongames_player_token', token);
+    }
+    return token;
+  } catch {
+    if (typeof window !== 'undefined' && (window as any).__ongames_token) {
+      return (window as any).__ongames_token;
+    }
+    const fallback = 'token-' + Math.random().toString(36).substring(2, 10);
+    if (typeof window !== 'undefined') {
+      (window as any).__ongames_token = fallback;
+    }
+    return fallback;
   }
-  return token;
 }
 
 export function getSavedName(): string {
   if (typeof window === 'undefined') return '';
-  return localStorage.getItem('ongames_player_name') || '';
+  try {
+    return localStorage.getItem('ongames_player_name') || '';
+  } catch {
+    return '';
+  }
 }
 
 export function saveName(name: string): void {
   if (typeof window === 'undefined') return;
-  if (name.trim()) {
-    localStorage.setItem('ongames_player_name', name.trim());
-  }
+  try {
+    if (name.trim()) {
+      localStorage.setItem('ongames_player_name', name.trim());
+    }
+  } catch {}
 }
 
 // Recent Rooms Memory

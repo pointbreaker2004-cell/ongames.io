@@ -36,6 +36,16 @@ export interface Player {
 
 export type RoomStatus = 'lobby' | 'playing' | 'game_over';
 
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: number;
+  isHost?: boolean;
+  isSystem?: boolean;
+}
+
 export interface BaseRoomConfig {
   timerSeconds?: number;
   [key: string]: any;
@@ -57,6 +67,7 @@ export interface ClientRoomView {
   gameView: any; // Game-specific sanitized view for the requesting player
   myPlayerId: string;
   isHost: boolean;
+  messages: ChatMessage[];
 }
 
 // ---------------- GAME-SPECIFIC TYPES ---------------- //

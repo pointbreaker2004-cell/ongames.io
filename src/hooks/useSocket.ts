@@ -98,6 +98,18 @@ export function useSocket(roomCode?: string) {
     socketRef.current.emit('game:action', { type, payload });
   }, []);
 
+  const sendChatMessage = useCallback((text: string) => {
+    if (!socketRef.current || !text.trim()) return;
+    playClickSound();
+    socketRef.current.emit('room:chat', { text: text.trim() });
+  }, []);
+
+  const addBotPlayer = useCallback(() => {
+    if (!socketRef.current) return;
+    playClickSound();
+    socketRef.current.emit('room:add_bot');
+  }, []);
+
   return {
     socket,
     isConnected,
@@ -110,6 +122,8 @@ export function useSocket(roomCode?: string) {
     changeGame,
     kickPlayer,
     sendAction,
+    sendChatMessage,
+    addBotPlayer,
     clearError: () => setError(null)
   };
 }
