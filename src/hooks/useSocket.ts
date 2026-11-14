@@ -14,9 +14,11 @@ export function useSocket(roomCode?: string) {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    const s = io(typeof window !== 'undefined' ? window.location.origin : '', {
-      reconnectionAttempts: 10,
+    const serverUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+    const s = io(serverUrl, {
+      reconnectionAttempts: 15,
       reconnectionDelay: 1000,
+      transports: ['websocket', 'polling']
     });
     socketRef.current = s;
     setSocket(s);
@@ -36,6 +38,11 @@ export function useSocket(roomCode?: string) {
       setIsConnected(false);
     });
 
+    s.on('connect_error', (err) => {
+      setIsConnected(false);
+      setError('Game server offline or unreachable. WebSockets required.');
+    });
+
     s.on('room:state', (state: ClientRoomView) => {
       setRoomState(state);
       setError(null);
@@ -53,7 +60,11 @@ export function useSocket(roomCode?: string) {
   }, [roomCode]);
 
   const createRoom = useCallback((gameType: GameType, playerName: string) => {
-    if (!socketRef.current) return;
+    if (!socketRef.current?.connected) {
+      setError('Connecting to game server... Persistent backend host is required for WebSockets.');
+      playAlertSound();
+      return;
+    }
     saveName(playerName);
     const token = getPlayerToken();
     playClickSound();
@@ -61,7 +72,11 @@ export function useSocket(roomCode?: string) {
   }, []);
 
   const joinRoom = useCallback((code: string, playerName: string) => {
-    if (!socketRef.current) return;
+    if (!socketRef.current?.connected) {
+      setError('Connecting to game server... Persistent backend host is required for WebSockets.');
+      playAlertSound();
+      return;
+    }
     saveName(playerName);
     const token = getPlayerToken();
     playClickSound();
